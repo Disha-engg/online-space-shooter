@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>🚀 Online Space Shooter</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#050519;color:#fff;font-family:Arial,sans-serif;text-align:center}
+main{width:min(1050px,100%);margin:auto;padding:18px}h1{margin:5px 0}.panel{padding:14px;background:#11112d;border:1px solid #36366e;border-radius:12px;margin:12px 0}
+input,button{font-size:16px;padding:11px;border-radius:8px;border:0;margin:4px}input{width:150px}button{cursor:pointer;font-weight:bold}canvas{width:100%;height:auto;border:2px solid #36366e;border-radius:12px;background:#050519}.hidden{display:none}.status{min-height:24px;color:#9fd8ff}
+</style></head>
+<body><main>
+<h1>🚀 Online Space Shooter</h1>
+<div id="lobby" class="panel">
+<button id="create">Create Game</button>
+<input id="code" maxlength="6" placeholder="ROOM CODE">
+<button id="join">Join Game</button>
+<div class="status" id="status">Create a room and send the code to your friend.</div>
+</div>
+<div id="gameBox" class="hidden"><canvas id="game" width="1000" height="650"></canvas><p>WASD / Arrow keys = move • SPACE = shoot</p><div id="gameStatus" class="status"></div></div>
+</main>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+const socket=io(), lobby=document.getElementById("lobby"), gameBox=document.getElementById("gameBox");
+const statusEl=document.getElementById("status"), gs=document.getElementById("gameStatus"), canvas=document.getElementById("game"),ctx=canvas.getContext("2d");
+let me=0,code="",players={},bullets=[],started=false,winner=null,keys={},lastInput=0;
+document.addEventListener("keydown",e=>{keys[e.key.toLowerCase()]=true;if(e.code==="Space")e.preventDefault()});
+document.addEventListener("keyup",e=>keys[e.key.toLowerCase()]=false);
+
+document.getElementById("create").onclick=()=>socket.emit("createRoom",result);
+document.getElementById("join").onclick=()=>socket.emit("joinRoom",document.getElementById("code").value,result);
+function result(r){if(!r?.ok){statusEl.textContent=r?.error||"Could not join room.";return}me=r.player;code=r.code;document.getElementById("code").value=code;lobby.classList.add("hidden");gameBox.classList.remove("hidden");gs.textContent=`Room ${code} • You are Player ${me} • Share this room code with your friend.`;loop()}
+socket.on("lobby",x=>{started=x.started;gs.textContent=started?`Room ${code} • Player ${me} • Fight!`:`Room ${code} • Player ${me} • Waiting for Player ${me===1?2:1}...`});
+socket.on("state",x=>{players=x.players||{};bullets=x.bullets||[];started=x.started;winner=x.winner;if(winner)gs.textContent=winner==me?"🏆 YOU WIN!":"💥 YOU LOSE!";});
+
+function loop(t=0){
+ const p=players[me]; if(p&&started&&!winner){
+   let dx=(keys.d||keys.arrowright?1:0)-(keys.a||keys.arrowleft?1:0);
+   let dy=(keys.s||keys.arrowdown?1:0)-(keys.w||keys.arrowup?1:0);
+   p.x=Math.max(50,Math.min(950,p.x+dx*7));p.y=Math.max(100,Math.min(600,p.y+dy*7));
+   if(t-lastInput>30){socket.emit("input",{x:p.x,y:p.y,shoot:!!keys[" "]});lastInput=t}
+ }
+ draw();requestAnimationFrame(loop)
+}
+function draw(){
+ ctx.fillStyle="#050519";ctx.fillRect(0,0,1000,650);
+ for(let i=0;i<120;i++){ctx.fillStyle="#aaaade";ctx.fillRect((i*97)%1000,(i*53)%650,2,2)}
+ for(const id of [1,2]){const p=players[id];if(!p)continue;ship(p.x,p.y,id===2);bar(p.x-45,p.y-55,90,p.health,id===me?"#55ff88":"#ff6666")}
+ for(const b of bullets){ctx.fillStyle="#ff6333";ctx.fillRect(b.x-6,b.y-3,12,6)}
+ ctx.fillStyle="#fff";ctx.font="bold 22px Arial";ctx.fillText(`P1: ${players[1]?.health??"-"} HP  |  ${players[1]?.score??0}`,20,35);ctx.fillText(`P2: ${players[2]?.health??"-"} HP  |  ${players[2]?.score??0}`,700,35);
+ if(!started){ctx.fillStyle="rgba(0,0,0,.55)";ctx.fillRect(0,0,1000,650);ctx.textAlign="center";ctx.font="bold 42px Arial";ctx.fillStyle="#fff";ctx.fillText("WAITING FOR PLAYER 2",500,320);ctx.font="20px Arial";ctx.fillText(`Room Code: ${code}`,500,360);ctx.textAlign="left"}
+}
+function ship(x,y,flip){ctx.save();ctx.translate(x,y);if(flip)ctx.scale(-1,1);ctx.fillStyle="#50b8ff";ctx.strokeStyle="#fff";ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(42,0);ctx.lineTo(-30,-30);ctx.lineTo(-20,0);ctx.lineTo(-30,30);ctx.closePath();ctx.fill();ctx.stroke();ctx.restore()}
+function bar(x,y,w,h,c){ctx.fillStyle="#222";ctx.fillRect(x,y,w,7);ctx.fillStyle=c;ctx.fillRect(x,y,w*Math.max(0,h)/100,7)}
+</script></body></html>
